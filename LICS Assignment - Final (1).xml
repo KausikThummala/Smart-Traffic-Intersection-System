@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>/*
+LICS ASSIGNMENT
+Group Members:
+Aravind Ramana RN: 2023B4A71279P
+Dhaval Gupta: 2023B3A70974P
+Krishna Bhagat: 2023B4A71038P
+Viraj Dhara: 2023B5A71100P
+*/
+
+const int Max_green_time = 60;   
+const int Min_green_time = 15;     
+const int Cross_time = 3;      
+const int Yellow_time = 3;    
+const int All_red_time = 1;   
+const int Ped_min_green = 15;
+const int MAX_QUEUE = 500;
+
+broadcast chan car_req_n, car_req_s, car_req_e, car_req_w;
+broadcast chan ped_req_n, ped_req_s, ped_req_e, ped_req_w;
+
+chan emg_req_ns, emg_req_ew;
+chan emg_rel_ns, emg_rel_ew;
+
+urgent chan drive_ns, drive_ew;
+urgent chan walk_ns, walk_ew;
+
+chan grant_ns, grant_ew;
+chan release_ns, release_ew;
+
+broadcast chan sig_green_ns, sig_yellow_ns;
+broadcast chan sig_green_ew, sig_yellow_ew;
+
+bool car_crossing = false;
+
+int q_n = 0;
+int q_s = 0;
+int q_e = 0;
+int q_w = 0;
+int q_ped_n = 0;
+int q_ped_s = 0;
+int q_ped_e = 0;
+int q_ped_w = 0;
+
+bool ped_hold_ns = false;
+bool ped_hold_ew = false;
+
+bool is_emg_ns = false;
+bool is_emg_ew = false;
+</declaration>
+	<template>
+		<name>MasterSync</name>
+		<declaration>clock t;</declaration>
+		<location id="id0" x="-595" y="-85">
+			<name x="-605" y="-119">Init</name>
+			<committed/>
+		</location>
+		<location id="id1" x="-391" y="68">
+			<name x="-459" y="85">NS_Active</name>
+		</location>
+		<location id="id2" x="17" y="68">
+			<name x="0" y="85">AllRed_to_EW</name>
+			<label kind="invariant" x="-8" y="102">t &lt;= All_red_time</label>
+		</location>
+		<location id="id3" x="17" y="-161">
+			<name x="0" y="-195">EW_Active</name>
+		</location>
+		<location id="id4" x="-391" y="-161">
+			<name x="-510" y="-178">AllRed_to_NS</name>
+			<label kind="invariant" x="-510" y="-195">t &lt;= All_red_time</label>
+		</location>
+		<init ref="id0"/>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-612" y="26">grant_ns!</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-246" y="77">release_ns?</label>
+			<label kind="assignment" x="-246" y="94">t = 0</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="34" y="-59">t &gt;= All_red_time</label>
+			<label kind="synchronisation" x="34" y="-42">grant_ew!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-204" y="-195">release_ew?</label>
+			<label kind="assignment" x="-204" y="-178">t = 0</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id4"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-391" y="-76">t &gt;= All_red_time</label>
+			<label kind="synchronisation" x="-365" y="-59">grant_ns!</label>
+		</transition>
+	</template>
+	<template>
+		<name>TrafficLight</name>
+		<parameter>chan &amp;grant, chan &amp;release, broadcast chan &amp;sig_green, broadcast chan &amp;sig_yellow, urgent broadcast chan &amp;drive, int &amp;q1, int &amp;q2, bool &amp;emg_other_flag, bool &amp;emg_here_flag, bool &amp;ped_hold</parameter>
+		<declaration>clock c;
+int service_count = 0;</declaration>
+		<location id="id10" x="-187" y="-289">
+			<name x="-229" y="-306">Red</name>
+		</location>
+		<location id="id11" x="187" y="-289">
+			<name x="170" y="-323">PreGreen</name>
+			<committed/>
+		</location>
+		<location id="id12" x="807" y="-289">
+			<name x="790" y="-340">Green</name>
+			<label kind="invariant" x="715" y="-357">c &lt;= Max_green_time</label>
+		</location>
+		<location id="id13" x="314" y="391">
+			<name x="289" y="407">Yellow</name>
+			<label kind="invariant" x="289" y="424">c &lt;= Yellow_time</label>
+		</location>
+		<init ref="id10"/>
+		<transition id="id14">
+			<source ref="id13"/>
+			<target ref="id10"/>
+			<label kind="guard" x="-306" y="50">c &gt;= Yellow_time</label>
+			<label kind="synchronisation" x="-306" y="67">release!</label>
+			<nail x="-178" y="93"/>
+		</transition>
+		<transition id="id15">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="-76" y="-289">grant?</label>
+			<label kind="assignment" x="-76" y="-264">c = 0, service_count = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="399" y="-314">sig_green!</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id12"/>
+			<target ref="id12"/>
+			<label kind="guard" x="289" y="-561">(q1 &gt; 0 || q2 &gt; 0) &amp;&amp; car_crossing == false &amp;&amp; service_count &lt; MAX_QUEUE &amp;&amp; !emg_here_flag</label>
+			<label kind="synchronisation" x="298" y="-544">drive!</label>
+			<label kind="assignment" x="298" y="-527">service_count++</label>
+			<nail x="476" y="-501"/>
+			<nail x="782" y="-501"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id12"/>
+			<target ref="id12"/>
+			<label kind="guard" x="1215" y="-416">(q1 &gt; 0 || q2 &gt; 0) &amp;&amp; car_crossing == false &amp;&amp; emg_here_flag</label>
+			<label kind="synchronisation" x="1224" y="-399">drive!</label>
+			<label kind="assignment" x="1224" y="-382">service_count++</label>
+			<nail x="1266" y="-518"/>
+			<nail x="1266" y="-297"/>
+		</transition>
+		<transition id="id19">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="476" y="8">c &gt;= Min_green_time &amp;&amp; !emg_here_flag &amp;&amp; 
+(q1 == 0 &amp;&amp; q2 == 0 &amp;&amp; !ped_hold)</label>
+			<label kind="synchronisation" x="485" y="51">sig_yellow!</label>
+			<label kind="assignment" x="485" y="68">c = 0</label>
+			<nail x="671" y="-51"/>
+			<nail x="671" y="153"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="1453" y="17">c == Max_green_time</label>
+			<label kind="synchronisation" x="1454" y="34">sig_yellow!</label>
+			<label kind="assignment" x="1455" y="51">c = 0</label>
+			<nail x="1496" y="-42"/>
+			<nail x="1496" y="136"/>
+		</transition>
+		<transition id="id21">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="1096" y="0">c &gt;= Min_green_time &amp;&amp; 
+emg_other_flag &amp;&amp; !emg_here_flag</label>
+			<label kind="synchronisation" x="1114" y="43">sig_yellow!</label>
+			<label kind="assignment" x="1114" y="60">c = 0</label>
+			<nail x="1198" y="-51"/>
+			<nail x="1199" y="145"/>
+		</transition>
+		<transition id="id22">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="841" y="0">service_count &gt;= MAX_QUEUE &amp;&amp; 
+c &gt;= Min_green_time</label>
+			<label kind="synchronisation" x="841" y="34">sig_yellow!</label>
+			<label kind="assignment" x="841" y="51">c = 0</label>
+			<nail x="918" y="-59"/>
+			<nail x="918" y="153"/>
+		</transition>
+	</template>
+	<template>
+		<name>PedestrianController</name>
+		<parameter>broadcast chan &amp;start, broadcast chan &amp;stop, urgent broadcast chan &amp;walk, int &amp;q1, int &amp;q2, bool &amp;hold</parameter>
+		<declaration>clock p;</declaration>
+		<location id="id23" x="-136" y="-68">
+			<name x="-146" y="-102">Idle</name>
+		</location>
+		<location id="id24" x="365" y="-68">
+			<name x="382" y="-85">Walk_Holding</name>
+			<label kind="invariant" x="492" y="-85">p &lt;= Ped_min_green</label>
+		</location>
+		<location id="id25" x="365" y="187">
+			<name x="390" y="178">Walk_Free</name>
+		</location>
+		<init ref="id23"/>
+		<transition id="id26">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-280" y="-85">start?</label>
+			<label kind="assignment" x="-340" y="-68">p = 0, hold = true</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id24"/>
+			<target ref="id24"/>
+			<label kind="guard" x="348" y="-178">(q1 &gt; 0 || q2 &gt; 0)</label>
+			<label kind="synchronisation" x="365" y="-161">walk!</label>
+			<nail x="348" y="-136"/>
+			<nail x="399" y="-136"/>
+		</transition>
+		<transition id="id28">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="guard" x="365" y="25">p == Ped_min_green</label>
+			<label kind="assignment" x="365" y="41">hold = false</label>
+		</transition>
+		<transition id="id29">
+			<source ref="id25"/>
+			<target ref="id25"/>
+			<label kind="guard" x="348" y="246">(q1 &gt; 0 || q2 &gt; 0)</label>
+			<label kind="synchronisation" x="365" y="263">walk!</label>
+			<nail x="348" y="238"/>
+			<nail x="399" y="238"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id25"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-119" y="187">stop?</label>
+			<nail x="-136" y="187"/>
+		</transition>
+		<transition id="id31">
+			<source ref="id24"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-59" y="-25">stop?</label>
+			<label kind="assignment" x="-51" y="-8">hold = false</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id24"/>
+			<target ref="id23"/>
+			<label kind="guard" x="34" y="-110">is_emg_ns || is_emg_ew</label>
+			<label kind="assignment" x="32" y="-89">hold = false</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id25"/>
+			<target ref="id23"/>
+			<label kind="guard" x="-8" y="51">is_emg_ns || is_emg_ew</label>
+		</transition>
+	</template>
+	<template>
+		<name>Vehicle</name>
+		<parameter>broadcast chan &amp;req, urgent chan &amp;drive, int &amp;q, bool &amp;emg_flag</parameter>
+		<declaration>clock x;</declaration>
+		<location id="id34" x="-229" y="-85">
+			<name x="-239" y="-119">Idle</name>
+		</location>
+		<location id="id35" x="110" y="-85">
+			<name x="101" y="-119">Queued</name>
+		</location>
+		<location id="id36" x="110" y="127">
+			<name x="127" y="119">Crossing</name>
+			<label kind="invariant" x="127" y="136">x &lt;= Cross_time</label>
+		</location>
+		<location id="id37" x="-229" y="127">
+			<name x="-239" y="144">Done</name>
+		</location>
+		<init ref="id34"/>
+		<transition id="id38">
+			<source ref="id34"/>
+			<target ref="id35"/>
+			<label kind="guard" x="-187" y="-144">q &lt; MAX_QUEUE</label>
+			<label kind="synchronisation" x="-187" y="-127">req!</label>
+			<label kind="assignment" x="-187" y="-110">q++</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id35"/>
+			<target ref="id36"/>
+			<label kind="guard" x="119" y="-17">car_crossing == false &amp;&amp; !emg_flag</label>
+			<label kind="synchronisation" x="127" y="0">drive?</label>
+			<label kind="assignment" x="127" y="17">x = 0, q--, car_crossing = true</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id36"/>
+			<target ref="id37"/>
+			<label kind="guard" x="-187" y="144">x &gt;= Cross_time</label>
+			<label kind="assignment" x="-187" y="161">car_crossing = false</label>
+		</transition>
+	</template>
+	<template>
+		<name>Pedestrian</name>
+		<parameter>broadcast chan &amp;req, urgent chan &amp;walk, int &amp;q</parameter>
+		<declaration>clock x;</declaration>
+		<location id="id41" x="-195" y="-85">
+			<name x="-205" y="-119">Idle</name>
+		</location>
+		<location id="id42" x="144" y="-85">
+			<name x="135" y="-119">Waiting</name>
+		</location>
+		<location id="id43" x="144" y="127">
+			<name x="161" y="119">Crossing</name>
+			<label kind="invariant" x="161" y="136">x &lt;= Cross_time</label>
+		</location>
+		<location id="id44" x="-195" y="127">
+			<name x="-205" y="144">Done</name>
+		</location>
+		<init ref="id41"/>
+		<transition id="id45">
+			<source ref="id41"/>
+			<target ref="id42"/>
+			<label kind="guard" x="-119" y="-136">q &lt; MAX_QUEUE</label>
+			<label kind="synchronisation" x="-119" y="-119">req!</label>
+			<label kind="assignment" x="-119" y="-102">q++</label>
+		</transition>
+		<transition id="id46">
+			<source ref="id42"/>
+			<target ref="id43"/>
+			<label kind="synchronisation" x="153" y="0">walk?</label>
+			<label kind="assignment" x="153" y="17">x = 0, q--</label>
+		</transition>
+		<transition id="id47">
+			<source ref="id43"/>
+			<target ref="id44"/>
+			<label kind="guard" x="-144" y="136">x &gt;= Cross_time</label>
+		</transition>
+	</template>
+	<template>
+		<name>EmergencyVehicle</name>
+		<parameter>chan &amp;emg_req, urgent chan &amp;drive, chan &amp;emg_rel, int &amp;q, bool &amp;active_flag</parameter>
+		<declaration>clock z;</declaration>
+		<location id="id48" x="-136" y="-85">
+			<name x="-146" y="-119">Idle</name>
+		</location>
+		<location id="id49" x="221" y="-85">
+			<name x="212" y="-119">WaitPrio</name>
+			<label kind="invariant" x="255" y="-102">z &lt;= 20</label>
+		</location>
+		<location id="id50" x="221" y="127">
+			<name x="238" y="119">Crossing</name>
+			<label kind="invariant" x="238" y="136">z &lt;= Cross_time</label>
+		</location>
+		<location id="id51" x="-136" y="127">
+			<name x="-146" y="144">Done</name>
+		</location>
+		<location id="id52" x="340" y="17">
+			<name x="330" y="-17">WaitingEnd</name>
+		</location>
+		<init ref="id48"/>
+		<transition id="id53">
+			<source ref="id52"/>
+			<target ref="id50"/>
+			<label kind="synchronisation" x="246" y="46">drive?</label>
+			<label kind="assignment" x="246" y="63">z = 0, q--, car_crossing = true</label>
+		</transition>
+		<transition id="id54">
+			<source ref="id49"/>
+			<target ref="id52"/>
+			<label kind="guard" x="246" y="-59">z == 20</label>
+		</transition>
+		<transition id="id55">
+			<source ref="id48"/>
+			<target ref="id49"/>
+			<label kind="guard" x="-51" y="-144">q &lt; MAX_QUEUE</label>
+			<label kind="synchronisation" x="-51" y="-127">emg_req!</label>
+			<label kind="assignment" x="-93" y="-110">active_flag = true, z = 0, q++</label>
+		</transition>
+		<transition id="id56">
+			<source ref="id49"/>
+			<target ref="id50"/>
+			<label kind="guard" x="34" y="-17">car_crossing == false</label>
+			<label kind="synchronisation" x="136" y="0">drive?</label>
+			<label kind="assignment" x="-25" y="17">z = 0, q--, car_crossing = true</label>
+		</transition>
+		<transition id="id57">
+			<source ref="id50"/>
+			<target ref="id51"/>
+			<label kind="guard" x="-76" y="153">z &gt;= Cross_time</label>
+			<label kind="synchronisation" x="-83" y="133">emg_rel!</label>
+			<label kind="assignment" x="-83" y="169">active_flag = false, car_crossing = false</label>
+		</transition>
+	</template>
+	<template>
+		<name>EmergencyManager</name>
+		<location id="id58" x="-68" y="-85">
+			<name x="-80" y="-119">Free</name>
+		</location>
+		<location id="id59" x="136" y="-170">
+			<name x="118" y="-204">BusyNS</name>
+		</location>
+		<location id="id60" x="136" y="0">
+			<name x="118" y="34">BusyEW</name>
+		</location>
+		<init ref="id58"/>
+		<transition id="id61">
+			<source ref="id58"/>
+			<target ref="id59"/>
+			<label kind="synchronisation" x="-26" y="-142">emg_req_ns?</label>
+		</transition>
+		<transition id="id62">
+			<source ref="id58"/>
+			<target ref="id60"/>
+			<label kind="synchronisation" x="-26" y="-57">emg_req_ew?</label>
+		</transition>
+		<transition id="id63">
+			<source ref="id59"/>
+			<target ref="id58"/>
+			<label kind="synchronisation" x="-26" y="-142">emg_rel_ns?</label>
+		</transition>
+		<transition id="id64">
+			<source ref="id60"/>
+			<target ref="id58"/>
+			<label kind="synchronisation" x="-26" y="-57">emg_rel_ew?</label>
+		</transition>
+	</template>
+	<system>
+Master = MasterSync();
+
+LightNS = TrafficLight(grant_ns, release_ns, sig_green_ns, sig_yellow_ns, drive_ns, q_n, q_s, is_emg_ew, is_emg_ns, ped_hold_ns);
+LightEW = TrafficLight(grant_ew, release_ew, sig_green_ew, sig_yellow_ew, drive_ew, q_e, q_w, is_emg_ns, is_emg_ew, ped_hold_ew);
+
+PedCtrlNS = PedestrianController(sig_green_ns, sig_yellow_ns, walk_ns, q_ped_n, q_ped_s, ped_hold_ns);
+PedCtrlEW = PedestrianController(sig_green_ew, sig_yellow_ew, walk_ew, q_ped_e, q_ped_w, ped_hold_ew);
+
+EmgMgr = EmergencyManager();
+
+// Instantiate as many car objects, pedestrian objects, and ambulance objects as needed for the simulation, keep only one object of the above objects each, as they are controllers and
+// part of model structure. After instantiating, add them to the system statement to start sim with them.
+
+CarN = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+CarS = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+CarE = Vehicle(car_req_e, drive_ew, q_e, is_emg_ew);
+CarW = Vehicle(car_req_w, drive_ew, q_w, is_emg_ew);
+/*C1 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C2 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C3 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C4 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C5 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C6 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C7 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C8 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C9 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C10 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C11 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C12 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C13 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C14 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C15 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C16 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C17 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C18 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C19 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C20 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C21 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C22 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C23 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C24 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);
+C25 = Vehicle(car_req_n, drive_ns, q_n, is_emg_ns);
+C26 = Vehicle(car_req_s, drive_ns, q_s, is_emg_ns);*/
+
+PedN = Pedestrian(ped_req_n, walk_ns, q_ped_n);
+PedS = Pedestrian(ped_req_s, walk_ns, q_ped_s);
+PedE = Pedestrian(ped_req_e, walk_ew, q_ped_e);
+PedW = Pedestrian(ped_req_w, walk_ew, q_ped_w);
+
+AmbulanceNS = EmergencyVehicle(emg_req_ns, drive_ns, emg_rel_ns, q_n, is_emg_ns);
+AmbulanceEW = EmergencyVehicle(emg_req_ew, drive_ew, emg_rel_ew, q_e, is_emg_ew);
+
+system Master, LightNS, LightEW, PedCtrlNS, PedCtrlEW, CarN, CarS, CarE, CarW, PedN, PedS, PedE, PedW, AmbulanceNS, AmbulanceEW, EmgMgr;
+//C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, (copypastable in)</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Safety: No Deadlock</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 15:53:32 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] not (LightNS.Green and LightEW.Green)</formula>
+			<comment>Safety: Traffic lights never green simultaneously</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 16:04:31 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] not ((PedCtrlNS.Walk_Holding or PedCtrlNS.Walk_Free) and LightEW.Green)</formula>
+			<comment>Safety: NS pedestrians don't walk when EW traffic is green</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 16:16:44 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] not ((PedCtrlEW.Walk_Holding or PedCtrlEW.Walk_Free) and LightNS.Green)</formula>
+			<comment>Safety: EW pedestrians don't walk when NS traffic is green</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 16:28:49 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] !(CarN.Crossing &amp;&amp; CarE.Crossing)</formula>
+			<comment>Safety: No perpendicular vehicle collisions</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 16:40:19 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] ((LightNS.Green &amp;&amp; LightNS.c &lt; Min_green_time) imply LightEW.Red)</formula>
+			<comment>Safety: During minimum green time, opposite is red (NS)</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 16:57:11 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] ((LightEW.Green &amp;&amp; LightEW.c &lt; Min_green_time) imply LightNS.Red)</formula>
+			<comment>Safety: During minimum green time, opposite is red (EW)</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 17:12:47 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>CarN.Queued --&gt; CarN.Crossing</formula>
+			<comment>Liveness: Queued NS vehicles eventually cross</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 19:32:15 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>PedN.Waiting --&gt; PedN.Crossing</formula>
+			<comment>Liveness: Waiting NS pedestrians eventually cross</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 20:03:37 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (AmbulanceNS.WaitPrio imply AmbulanceNS.z &lt;= 20)</formula>
+			<comment>Liveness: NS emergency vehicles never wait more than 20 time units in WaitPrio</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 18:31:35 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (AmbulanceEW.WaitPrio imply AmbulanceEW.z &lt;= 20)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2025-11-23 18:54:08 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (LightNS.Green and is_emg_ew)</formula>
+			<comment>Policy: EW emergency can interrupt NS phase</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 18:46:27 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (PedCtrlNS.Idle and PedCtrlNS.p &lt; Ped_min_green and PedCtrlNS.p &gt; 0)</formula>
+			<comment>Policy: EW emergency can interrupt NS phase (Pedestrian controller check)</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 18:46:28 +0530">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (LightNS.Red and LightNS.c &lt; Min_green_time and LightNS.c &gt; 0)</formula>
+			<comment>Interruption Happens</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-23 18:46:30 +0530">
+			</result>
+		</query>
+	</queries>
+</nta>
