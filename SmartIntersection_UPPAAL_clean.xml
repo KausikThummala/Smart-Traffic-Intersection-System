@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<nta>
+	<declaration>// Smart Intersection - IMMEDIATE Policy
+const int GREEN = 0, YELLOW = 1, RED = 2;
+const int MAX_GREEN = 60000, MIN_GREEN = 15000, YELLOW_TIME = 2000, ALL_RED = 1000;
+const int CROSS_TIME = 3000, PED_MIN = 15000;
+
+urgent chan switch_ns, switch_ew, emergency_ns_active, emergency_ew_active, emergency_clear;
+urgent chan ped_req_ns, ped_req_ew, ped_cross_ns, ped_cross_ew;
+urgent chan vehicle_ns, vehicle_ew, cross_done_ns, cross_done_ew;
+
+int ns_light = RED, ew_light = RED, ns_ped = RED, ew_ped = RED;
+int ns_vehicles = 0, ew_vehicles = 0, ns_peds = 0, ew_peds = 0;
+bool emergency_ns_active = false, emergency_ew_active = false, preemption = false;
+
+bool perp_traffic_stopped(int dir) {
+    return (dir == 0) ? ew_light == RED : ns_light == RED;
+}
+
+int next_direction() {
+    if (ns_light == RED && ew_light == RED) {
+        if (ns_vehicles > 0 && ew_vehicles == 0) return 0;
+        if (ew_vehicles > 0 && ns_vehicles == 0) return 1;
+        return (0 == 0) ? 0 : 1;
+    }
+    return (ns_light == GREEN) ? 1 : 0;
+}
+
+clock global_clock;</declaration>
+	
+	<template>
+		<name>TrafficLight_NS</name>
+		<declaration>clock x;</declaration>
+		<location id="id0" x="0" y="0">
+			<name>Red</name>
+		</location>
+		<location id="id1" x="0" y="-100">
+			<name>Green</name>
+			<label kind="invariant" x="0" y="-120">x&lt;=MAX_GREEN</label>
+		</location>
+		<location id="id2" x="100" y="-100">
+			<name>Yellow</name>
+			<label kind="invariant" x="100" y="-120">x&lt;=YELLOW_TIME</label>
+		</location>
+		<location id="id3" x="100" y="0">
+			<name>AllRed</name>
+			<label kind="invariant" x="100" y="20">x&lt;=ALL_RED</label>
+		</location>
+		
+		<init ref="id0"/>
+		
+		<transition>
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-50" y="-50">!preemption &amp;&amp; next_direction()==0 &amp;&amp; ew_light==RED</label>
+			<label kind="synchronisation" x="-50" y="-30">switch_ns?</label>
+			<label kind="assignment" x="-50" y="-10">ns_light = GREEN, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="50" y="-110">x&gt;=MIN_GREEN &amp;&amp; (x&gt;=MAX_GREEN || (preemption &amp;&amp; !emergency_ns_active))</label>
+			<label kind="assignment" x="50" y="-90">ns_light = YELLOW, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="120" y="-50">x&gt;=YELLOW_TIME</label>
+			<label kind="assignment" x="120" y="-30">ns_light = RED, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="guard" x="50" y="10">x&gt;=ALL_RED</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>TrafficLight_EW</name>
+		<declaration>clock x;</declaration>
+		<location id="id4" x="0" y="0">
+			<name>Red</name>
+		</location>
+		<location id="id5" x="0" y="-100">
+			<name>Green</name>
+			<label kind="invariant" x="0" y="-120">x&lt;=MAX_GREEN</label>
+		</location>
+		<location id="id6" x="100" y="-100">
+			<name>Yellow</name>
+			<label kind="invariant" x="100" y="-120">x&lt;=YELLOW_TIME</label>
+		</location>
+		<location id="id7" x="100" y="0">
+			<name>AllRed</name>
+			<label kind="invariant" x="100" y="20">x&lt;=ALL_RED</label>
+		</location>
+		
+		<init ref="id4"/>
+		
+		<transition>
+			<source ref="id4"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-50" y="-50">!preemption &amp;&amp; next_direction()==1 &amp;&amp; ns_light==RED</label>
+			<label kind="synchronisation" x="-50" y="-30">switch_ew?</label>
+			<label kind="assignment" x="-50" y="-10">ew_light = GREEN, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="guard" x="50" y="-110">x&gt;=MIN_GREEN &amp;&amp; (x&gt;=MAX_GREEN || (preemption &amp;&amp; !emergency_ew_active))</label>
+			<label kind="assignment" x="50" y="-90">ew_light = YELLOW, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="guard" x="120" y="-50">x&gt;=YELLOW_TIME</label>
+			<label kind="assignment" x="120" y="-30">ew_light = RED, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id7"/>
+			<target ref="id4"/>
+			<label kind="guard" x="50" y="10">x&gt;=ALL_RED</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>EmergencyDetector</name>
+		<declaration>clock x;</declaration>
+		<location id="id8" x="0" y="0">
+			<name>Idle</name>
+		</location>
+		<location id="id9" x="100" y="-50">
+			<name>NS_Emergency</name>
+		</location>
+		<location id="id10" x="100" y="50">
+			<name>EW_Emergency</name>
+		</location>
+		
+		<init ref="id8"/>
+		
+		<transition>
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="guard" x="50" y="-30">x >= 10000</label>
+			<label kind="synchronisation" x="50" y="-10">emergency_ns!</label>
+			<label kind="assignment" x="50" y="10">emergency_ns_active = true, preemption = true, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id8"/>
+			<target ref="id10"/>
+			<label kind="guard" x="50" y="30">x >= 10000</label>
+			<label kind="synchronisation" x="50" y="50">emergency_ew!</label>
+			<label kind="assignment" x="50" y="70">emergency_ew_active = true, preemption = true, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id9"/>
+			<target ref="id8"/>
+			<label kind="guard" x="150" y="-30">x&gt;=5000</label>
+			<label kind="synchronisation" x="150" y="-10">emergency_clear!</label>
+			<label kind="assignment" x="150" y="10">emergency_ns_active = false, preemption = emergency_ew_active, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id10"/>
+			<target ref="id8"/>
+			<label kind="guard" x="150" y="30">x&gt;=5000</label>
+			<label kind="synchronisation" x="150" y="50">emergency_clear!</label>
+			<label kind="assignment" x="150" y="70">emergency_ew_active = false, preemption = emergency_ns_active, x = 0</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>Pedestrian_NS</name>
+		<declaration>clock x;</declaration>
+		<location id="id11" x="0" y="0">
+			<name>Red</name>
+		</location>
+		<location id="id12" x="100" y="0">
+			<name>Green</name>
+			<label kind="invariant" x="100" y="20">x&lt;=PED_MIN</label>
+		</location>
+		<location id="id13" x="200" y="0">
+			<name>Crossing</name>
+			<label kind="invariant" x="200" y="20">x&lt;=PED_MIN</label>
+		</location>
+		
+		<init ref="id11"/>
+		
+		<transition>
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="guard" x="50" y="-20">ns_peds&gt;0 &amp;&amp; perp_traffic_stopped(0) &amp;&amp; !preemption</label>
+			<label kind="synchronisation" x="50" y="0">ped_cross_ns?</label>
+			<label kind="assignment" x="50" y="20">ns_ped = GREEN, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="assignment" x="150" y="10">x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id13"/>
+			<target ref="id11"/>
+			<label kind="guard" x="150" y="20">x&gt;=PED_MIN</label>
+			<label kind="synchronisation" x="150" y="40">cross_done_ns!</label>
+			<label kind="assignment" x="150" y="60">ns_ped = RED, ns_peds = max(0, ns_peds-1)</label>
+		</transition>
+		
+		<transition>
+			<source ref="id12"/>
+			<target ref="id11"/>
+			<label kind="guard" x="150" y="-40">preemption &amp;&amp; emergency_ns_active</label>
+			<label kind="assignment" x="150" y="-20">ns_ped = RED</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>Pedestrian_EW</name>
+		<declaration>clock x;</declaration>
+		<location id="id14" x="0" y="0">
+			<name>Red</name>
+		</location>
+		<location id="id15" x="100" y="0">
+			<name>Green</name>
+			<label kind="invariant" x="100" y="20">x&lt;=PED_MIN</label>
+		</location>
+		<location id="id16" x="200" y="0">
+			<name>Crossing</name>
+			<label kind="invariant" x="200" y="20">x&lt;=PED_MIN</label>
+		</location>
+		
+		<init ref="id14"/>
+		
+		<transition>
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="50" y="-20">ew_peds&gt;0 &amp;&amp; perp_traffic_stopped(1) &amp;&amp; !preemption</label>
+			<label kind="synchronisation" x="50" y="0">ped_cross_ew?</label>
+			<label kind="assignment" x="50" y="20">ew_ped = GREEN, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="assignment" x="150" y="10">x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id16"/>
+			<target ref="id14"/>
+			<label kind="guard" x="150" y="20">x&gt;=PED_MIN</label>
+			<label kind="synchronisation" x="150" y="40">cross_done_ew!</label>
+			<label kind="assignment" x="150" y="60">ew_ped = RED, ew_peds = max(0, ew_peds-1)</label>
+		</transition>
+		
+		<transition>
+			<source ref="id15"/>
+			<target ref="id14"/>
+			<label kind="guard" x="150" y="-40">preemption &amp;&amp; emergency_ew_active</label>
+			<label kind="assignment" x="150" y="-20">ew_ped = RED</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>VehicleGenerator</name>
+		<declaration>clock x;</declaration>
+		<location id="id17" x="0" y="0">
+			<name>Idle</name>
+			<label kind="invariant" x="0" y="20">x&lt;=1000</label>
+		</location>
+		<location id="id18" x="100" y="-50">
+			<name>GenNS</name>
+		</location>
+		<location id="id19" x="100" y="50">
+			<name>GenEW</name>
+		</location>
+		
+		<init ref="id17"/>
+		
+		<transition>
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="guard" x="50" y="-30">x >= 100000</label>
+			<label kind="synchronisation" x="50" y="-10">vehicle_ns!</label>
+			<label kind="assignment" x="50" y="10">ns_vehicles = ns_vehicles + 1, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id17"/>
+			<target ref="id19"/>
+			<label kind="guard" x="50" y="30">x >= 100000</label>
+			<label kind="synchronisation" x="50" y="50">vehicle_ew!</label>
+			<label kind="assignment" x="50" y="70">ew_vehicles = ew_vehicles + 1, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id18"/>
+			<target ref="id17"/>
+			<label kind="assignment" x="50" y="-10">x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id19"/>
+			<target ref="id17"/>
+			<label kind="assignment" x="50" y="50">x = 0</label>
+		</transition>
+	</template>
+	
+	<template>
+		<name>PedestrianGenerator</name>
+		<declaration>clock x;</declaration>
+		<location id="id20" x="0" y="0">
+			<name>Idle</name>
+			<label kind="invariant" x="0" y="20">x&lt;=2000</label>
+		</location>
+		<location id="id21" x="100" y="-50">
+			<name>GenNS</name>
+		</location>
+		<location id="id22" x="100" y="50">
+			<name>GenEW</name>
+		</location>
+		
+		<init ref="id20"/>
+		
+		<transition>
+			<source ref="id20"/>
+			<target ref="id21"/>
+			<label kind="guard" x="50" y="-30">x >= 2000</label>
+			<label kind="synchronisation" x="50" y="-10">ped_req_ns!</label>
+			<label kind="assignment" x="50" y="10">ns_peds = ns_peds + 1, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id20"/>
+			<target ref="id22"/>
+			<label kind="guard" x="50" y="30">x >= 2000</label>
+			<label kind="synchronisation" x="50" y="50">ped_req_ew!</label>
+			<label kind="assignment" x="50" y="70">ew_peds = ew_peds + 1, x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id21"/>
+			<target ref="id20"/>
+			<label kind="assignment" x="50" y="-10">x = 0</label>
+		</transition>
+		
+		<transition>
+			<source ref="id22"/>
+			<target ref="id20"/>
+			<label kind="assignment" x="50" y="50">x = 0</label>
+		</transition>
+	</template>
+	
+	<system>system TrafficLight_NS, TrafficLight_EW, EmergencyDetector, Pedestrian_NS, Pedestrian_EW, VehicleGenerator, PedestrianGenerator;</system>
+	
+	<queries>
+		<query>
+			<formula>A[] not (ns_light == GREEN and ew_light == GREEN)</formula>
+			<comment>Safety: Never both traffic lights green</comment>
+		</query>
+		<query>
+			<formula>A[] not (ns_ped == GREEN and ew_light == GREEN)</formula>
+			<comment>Safety: Never NS pedestrian and EW traffic green</comment>
+		</query>
+		<query>
+			<formula>A[] not (ew_ped == GREEN and ns_light == GREEN)</formula>
+			<comment>Safety: Never EW pedestrian and NS traffic green</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; (ns_vehicles == 0)</formula>
+			<comment>Liveness: All NS vehicles eventually cross</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; (ew_vehicles == 0)</formula>
+			<comment>Liveness: All EW vehicles eventually cross</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; (ns_peds == 0)</formula>
+			<comment>Liveness: All NS pedestrians eventually cross</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; (ew_peds == 0)</formula>
+			<comment>Liveness: All EW pedestrians eventually cross</comment>
+		</query>
+		<query>
+			<formula>A[] emergency_ns_active --> (ns_light == GREEN within 5)</formula>
+			<comment>IMMEDIATE Policy: Emergency NS gets green within 5s</comment>
+		</query>
+		<query>
+			<formula>A[] emergency_ew_active --> (ew_light == GREEN within 5)</formula>
+			<comment>IMMEDIATE Policy: Emergency EW gets green within 5s</comment>
+		</query>
+	</queries>
+</nta>
